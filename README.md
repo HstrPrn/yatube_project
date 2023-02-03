@@ -10,9 +10,9 @@ Yatube is an educational poject, which is social network for blogger all over th
 
 ### Instructions for dev - mode
 - install and activate your virtual enviroment
-- install requirements.txt
+- install requirements
 	```
-	pip install -r rquirements
+	pip install -r requirements.txt
 	```
 - open terminal from your project's derictory and use command:
 	```
