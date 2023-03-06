@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Профайл пользователя {{ username }}{% endblock title %}
+{% block content %}
+  <main>
+    <div class="container py-5">        
+      <h1>Все посты пользователя {{ uesername }} </h1>
+      <h3>Всего постов: {{ total_posts }} </h3>   
+      {% for post in page_obj %}
+        {% include 'posts/includes/post_card.html' %}
+        {% if not forloop.last %}
+          <hr>
+        {% endif %}
+      {% endfor %}
+      {% include 'posts/includes/paginator.html' %}
+    </div>
+  </main>
+{% endblock content %}
