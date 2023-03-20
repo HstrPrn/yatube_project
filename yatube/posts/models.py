@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 
+
+SHOWN_CHARS_COUNT = 15
+
 User = get_user_model()
 
 
@@ -34,7 +37,7 @@ class Post(models.Model):
     )
 
     def __str__(self):
-        return self.text
+        return self.text[:SHOWN_CHARS_COUNT]
 
     class Meta:
         ordering = ['-pub_date']
