@@ -1,10 +1,6 @@
 from http import HTTPStatus
 from django.test import TestCase, Client
-from django.contrib.auth import get_user_model
-from posts.models import Post, Group
-
-
-User = get_user_model()
+from posts.models import Post, Group, User
 
 
 class PostUrlsTests(TestCase):

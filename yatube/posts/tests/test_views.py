@@ -1,12 +1,17 @@
-from django.contrib.auth import get_user_model
-from django.test import TestCase, Client
+import shutil
+import tempfile
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile as suf
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django import forms
-from posts.models import Post, Group
+from posts.models import Post, Group, Comment, User
 from posts.views import SHOWN_POSTS_NUMBER, SHOWN_TITLE_CHAR_COUNT
 
-User = get_user_model()
 
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
+
+ADD_COMMENT: str = 'posts:add_comment'
 INDEX: str = 'posts:index'
 POST_CREATE: str = 'posts:post_create'
 GROUP_LIST: str = 'posts:group_list'
@@ -17,11 +22,25 @@ POST_EDIT: str = 'posts:post_edit'
 END_PAGE_POSTS_COUNT: int = 3
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostViewsTests(TestCase):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.image = (
+             b'\x47\x49\x46\x38\x39\x61\x02\x00'
+             b'\x01\x00\x80\x00\x00\x00\x00\x00'
+             b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+             b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+             b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+             b'\x0A\x00\x3B'
+        )
+        cls.uploaded = suf(
+            name='pic.png',
+            content=cls.image,
+            content_type='image/png'
+        )
         cls.author = User.objects.create_user(username='test_user')
         cls.group = Group.objects.create(
             title='Test group',
@@ -31,8 +50,19 @@ class PostViewsTests(TestCase):
         cls.post = Post.objects.create(
             author=cls.author,
             text='Test post',
-            group=cls.group
+            group=cls.group,
+            image=cls.uploaded
         )
+        cls.comment = Comment.objects.create(
+            post=cls.post,
+            author=cls.author,
+            text='Test comment'
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.guest_user = Client()
@@ -46,7 +76,7 @@ class PostViewsTests(TestCase):
         URL-адреса использую соответствующий шаблон для
         зарегистрированного пользователя.
         """
-        views_templates = {
+        used_templates = {
             reverse(INDEX): 'posts/index.html',
             reverse(POST_CREATE): 'posts/create_post.html',
             reverse(
@@ -66,10 +96,22 @@ class PostViewsTests(TestCase):
                 kwargs={'post_id': self.post.id}
             ): 'posts/create_post.html',
         }
-        for view, template in views_templates.items():
+        unused_templates = {
+            reverse(
+                ADD_COMMENT,
+                kwargs={'post_id': self.post.id}
+            ): [],
+        }
+
+        for view, template in used_templates.items():
             auth_response = self.auth_user.get(view)
             with self.subTest(view=view):
                 self.assertTemplateUsed(auth_response, template)
+
+        for view, template in unused_templates.items():
+            auth_response = self.auth_user.get(view)
+            with self.subTest(view=view):
+                self.assertTemplateNotUsed(auth_response, template)
 
     def test_views_uses_correct_template_with_guest_user(self):
         """
@@ -97,6 +139,10 @@ class PostViewsTests(TestCase):
                 POST_EDIT,
                 kwargs={'post_id': self.post.id}
             ): 'posts/create_post.html',
+            reverse(
+                ADD_COMMENT,
+                kwargs={'post_id': self.post.id}
+            ): [],
         }
         for view, template in used_templates.items():
             guest_response = self.guest_user.get(view)
@@ -135,6 +181,9 @@ class PostViewsTests(TestCase):
 
     def test_post_detail_page_show_correct_context(self):
         """Страница поста возвращает ожидаемый контекст."""
+        form_fields = {
+            'text': forms.fields.CharField
+        }
         response = self.auth_user.get(
             reverse(POST_DETAIL,
                     kwargs={'post_id': self.post.id})
@@ -144,6 +193,12 @@ class PostViewsTests(TestCase):
         self.assertEqual(response.context['post'], self.post)
         self.assertEqual(response.context['title'],
                          self.post.text[:SHOWN_TITLE_CHAR_COUNT])
+        self.assertEqual(response.context['comments'][0],
+                         self.comment)
+        for value, expected in form_fields.items():
+            self.assertIsInstance(
+                response.context['form'].fields[value], expected
+            )
 
     def test_create_and_edit_post_pages_show_correct_contest(self):
         """
@@ -159,6 +214,7 @@ class PostViewsTests(TestCase):
             form_field = {
                 'text': forms.fields.CharField,
                 'group': forms.models.ModelChoiceField,
+                'image': forms.fields.ImageField,
             }
             for value, expected in form_field.items():
                 with self.subTest(value=value):
@@ -202,6 +258,33 @@ class PostViewsTests(TestCase):
             ).context['page_obj']
         )
         self.assertNotEqual(test_group_posts_count, posts_count + 1)
+
+    def test_add_comment_view_by_auth_user(self):
+        pass
+
+    def test_views_context_contains_image(self):
+        views = (
+            reverse(INDEX),
+            reverse(
+                GROUP_LIST,
+                kwargs={'slug': self.group.slug}
+            ),
+            reverse(
+                PROFILE,
+                kwargs={'username': self.author}
+            ),
+        )
+        for view in views:
+            with self.subTest(view=view):
+                response = self.auth_user.get(view).context['page_obj'][0]
+                self.assertIsNotNone(response.image)
+        response = self.auth_user.get(
+            reverse(
+                POST_DETAIL,
+                kwargs={'post_id': self.post.id}
+            )
+        ).context['post']
+        self.assertIsNotNone(response.image)
 
 
 class PaginatorTests(TestCase):

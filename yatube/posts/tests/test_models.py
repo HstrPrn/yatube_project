@@ -1,9 +1,5 @@
 from django.test import TestCase
-from django.contrib.auth import get_user_model
-from ..models import Post, Group, SHOWN_CHARS_COUNT
-
-
-User = get_user_model()
+from ..models import Post, Group, User, SHOWN_CHARS_COUNT
 
 
 class PostModelTest(TestCase):
