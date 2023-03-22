@@ -10,7 +10,7 @@ SHOWN_POSTS_NUMBER: int = 10
 SHOWN_TITLE_CHAR_COUNT: int = 30
 
 
-@cache_page(15)
+@cache_page(20, key_prefix='index_page')
 def index(request):
     posts_list = Post.objects.select_related('group')
     paginator = Paginator(posts_list, SHOWN_POSTS_NUMBER)
